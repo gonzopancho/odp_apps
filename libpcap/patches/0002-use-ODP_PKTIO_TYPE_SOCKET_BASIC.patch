@@ -1,0 +1,30 @@
+From 4ee6e118d631ec34b20fa97fc31c83867dc098da Mon Sep 17 00:00:00 2001
+From: Maxim Uvarov <maxim.uvarov@linaro.org>
+Date: Fri, 4 Apr 2014 00:45:13 +0400
+Subject: [PATCH 2/2] use ODP_PKTIO_TYPE_SOCKET_BASIC
+
+ODP_PKTIO_TYPE_SOCKET type of I/O was splitted to
+_BASIC _MMSG _MMAP.
+
+Signed-off-by: Maxim Uvarov <maxim.uvarov@linaro.org>
+---
+ pcap-linux.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/pcap-linux.c b/pcap-linux.c
+index be0ef20..4372be6 100644
+--- a/pcap-linux.c
++++ b/pcap-linux.c
+@@ -6189,7 +6189,8 @@ pcap_odp_init(pcap_t *handle)
+ 	} else {
+ #endif
+ 		memset(&pparams.sock_params, 0, sizeof(pparams.sock_params));
+-		pparams.sock_params.type = ODP_PKTIO_TYPE_SOCKET;
++		pparams.sock_params.type = ODP_PKTIO_TYPE_SOCKET_BASIC;
++		pparams.sock_params.fanout = 0;
+ 		printf("  pktio type: socket\n");
+ #ifdef ODP_HAVE_NETMAP
+ 	}
+-- 
+1.8.5.1.163.gd7aced9
+
