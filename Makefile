@@ -7,7 +7,7 @@ odp:
 	if [ ! -d odp.git ]; \
 		then git clone http://git.linaro.org/git/lng/odp.git odp.git; \
 	fi
-	cd odp.git; make CFLAGS="-fPIC"; make install
+	cd odp.git; make libs_install  CFLAGS="-fPIC"
 
 all: odp libpcap
 
