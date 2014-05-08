@@ -1,7 +1,12 @@
-.PHONY: libpcap
+.PHONY: libpcap openvpn
+
+all: openvpn libpcap
 
 libpcap: odp
 	make -C libpcap ODP_DIR=$(PWD)/odp.git
+
+openvpn: odp
+	make -C openvpn
 
 odp:
 	if [ ! -d odp.git ]; \
@@ -9,8 +14,7 @@ odp:
 	fi
 	cd odp.git; make libs_install  CFLAGS="-fPIC"
 
-all: odp libpcap
-
 distclean:
 	rm -rf odp.git
 	make -C libpcap distclean
+	make -C openvpn distclean

@@ -1,0 +1,90 @@
+	OpenDataPlane OPENVPN
+
+This is demo how to change OpenVPN to add ODP packets I/O with minimal
+code line changes.
+
+Flowing packages needed to be installed:
+
+ - bzip2
+ - flex
+ - bison
+ - build-essential
+ - autoconf2.13
+ - autotools-dev
+ - libtool
+ - gettext
+ - libsnappy-dev
+ - libssl0.9.8
+ - libssl-dev
+ - liblzo2-dev
+ - libpam0g-dev
+
+Server side (regular openvpn, no odp-shm in config file):
+
+ vconfig="/tmp/vpn_server.cfg"
+ echo "rport 555" > ${vconfig}
+ echo "lport 777"  >> ${vconfig}
+ echo "remote 195.0.0.1"  >> ${vconfig}
+ echo "local 195.0.0.2"  >> ${vconfig}
+ echo "dev tun0"  >> ${vconfig}
+ echo "verb 1" >> ${vconfig}
+ echo "ping 3"  >> ${vconfig}
+ echo "inactive 12000 10000000"  >> ${vconfig}
+ echo "ifconfig 10.1.0.1 10.1.0.2" >> ${vconfig}
+
+ sysctl  -w net.ipv6.conf.all.disable_ipv6=1
+
+ ifconfig ${ETH} 195.0.0.2 up
+
+ # add mac if remote client to arp table
+ arp -i ${ETH} -s 195.0.0.1 02:8e:8f:32:21:98
+
+ modprobe tun
+ openvpn/src/openvpn/openvpn ${vconfig} 2>&1 > /dev/null &
+
+ #dump network packets
+ tcpdump -i ${ETH} -Nnnn -x
+
+Client side (odp-shm in config file, openvpn will take packets from shared memory):
+
+ vconfig="/tmp/vpn_clinet.cfg"
+ echo "rport 777" > ${vconfig}
+ echo "lport 555"  >> ${vconfig}
+ echo "remote 195.0.0.2"  >> ${vconfig}
+ echo "local 195.0.0.1"  >> ${vconfig}
+ echo "dev tun0"  >> ${vconfig}
+ echo "verb 1" >> ${vconfig}
+ echo "ping 3"  >> ${vconfig}
+ echo "inactive 12000 10000000"  >> ${vconfig}
+ echo "ifconfig 10.1.0.2 10.1.0.1" >> ${vconfig}
+ echo "odp-shm" >> ${vconfig}
+
+ sysctl  -w net.ipv6.conf.all.disable_ipv6=1
+
+ ifconfig eth1 0.0.0.0 up
+
+ arp -i eth1 -s 195.0.0.2 38:ea:a7:93:8c:29 #add remote host hw
+ ./odp/test/odp_ipcd/odp_ipcd -i eth1 -d 38:ea:a7:93:8c:29 -s 195.0.0.1 -r 195.0.0.2 2>&1 > /dev/null &
+
+ modprobe tun
+ openvpn/src/openvpn/openvpn ${vconfig} 2>&1 > /dev/null &
+ sleep 1
+ ifconfig
+
+ ping -c 20 10.1.0.1
+ ping -c 20 10.1.0.2
+
+
+Result:
+  Tunnel network has to be established between clinet and server. You should be able to ping both virtual
+  interfaces.
+
+TODO:
+	1. Performance for virtual network might be low due to:
+		a) tap devices are slow itself.
+	  	b) This demo was not intend to improve performance, it was only for
+		   basic functionality. Events about receiving/delivered packets to
+		   from ODP might be not well written and can be improved to speed up I/O.
+
+	2.  Demo works only for peer to peer mode. For multi-client server it's needed to implement
+	    client detection from odp packet buffer.
