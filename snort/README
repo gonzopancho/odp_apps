@@ -1,0 +1,37 @@
+--- Snort on Open Data Plane ---
+
+Directory has 2 different demos:
+
+1. Data Acquisition Module (DAQ) with ODP support.
+
+All magic happens inside shared library daq-odp.so which provides packet I/O to Snort application. DAQ module loaded as plug-in so no snort modification is needed.
+(Because of odp uses lib rt I added librt to dependencies.).
+
+Compile:
+make
+Run:
+make run
+
+Make run will execute following command (odp daq module, interface eth0, and 10 packets to capture):
+snort --daq-dir=${PWD}/daq-2.0.2/os-daq-modules/.libs/ --daq=odp -i eth0 -n 10
+
+2. Snort analyze function used in Open Data Plane applications.
+
+This example is opposite to the first one. I.e. it adds snort functionality to odp apps. For that Snort was built as static library with exported needed functions.
+As base test/packet_io example was taken. Main thread does snort initialization then it starts several odp threads which do packet processing and feed Snort.
+So this test has to scale across number of cpus and have some performance benefits according to regular single threaded snort.
+
+Compile:
+make odpsnort
+Run:
+odpsnort/odp-snort
+
+Configuration:
+Selection of number of threads and interfaces can be done in source code:
+odpsnort/odp_pktio.c
+    args->appl.core_count = 1;
+    args->appl.if_count = 1;
+    args->appl.if_names = calloc(args->appl.if_count, sizeof(char *));
+    args->appl.if_names[0] = strdup("eth0");
+
+
