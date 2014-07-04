@@ -23,6 +23,7 @@ INC += "-I$(SNORT)/src/control"
 INC += "-I$(SNORT)/src/file-process"
 INC += "-I$(SNORT)/src/file-process/libs"
 INC += "-I$(SNORT)/src/preprocessors/Stream5"
+INC += "-I$(SNORT)/src"
 INC += "-I$(SNORT)"
 
 ODP_DIR = $(PWD)/../../odp.git
@@ -38,7 +39,7 @@ ODP_CFLAGS += -I$(DAQ)
 
 all:
 	$(CC) -c -O0 -g snort.c ${CFLAGS} ${LDFLAGS} $(INC) -o snort.o
-	$(CC) -c -O0 -g -pthread $(ODP_CFLAGS)  odp_pktio.c -o odp_pktio.o
+	$(CC) -c -O0 -g -pthread ${INC}  $(ODP_CFLAGS) odp_pktio.c -o odp_pktio.o
 	$(CC) snort.o odp_pktio.o  ${CFLAGS} ${LDFLAGS} $(INC)  ${LIBSNORT} ${DAQ_LIB} ${LIBDNET}  -ldl -lz -lpcap -pthread -lpcre -lssl -lcrypto -lm -lrt -o odp-snort
 clean:
 	rm -rf odp-snort *.o

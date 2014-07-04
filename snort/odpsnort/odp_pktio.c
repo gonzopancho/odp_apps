@@ -7,7 +7,7 @@
 /**
  * @file
  *
- * @example odp_example_pktio.c  ODP basic packet IO loopback test application
+ * @example odp_pktio.c  ODP packet IO example for Snort application
  */
 
 #include <stdlib.h>
@@ -23,6 +23,7 @@
 
 /* Snort */
 #include <api/daq_common.h>
+#include "snort.h"
 
 #define MAX_WORKERS            32
 #define SHM_PKT_POOL_SIZE      (512*2048)
@@ -75,11 +76,11 @@ typedef struct {
 static args_t *args;
 
 /* helper funcs */
-static int drop_err_pkts(odp_packet_t pkt_tbl[], unsigned len);
-static void swap_pkt_addrs(odp_packet_t pkt_tbl[], unsigned len);
 static void parse_args(int argc, char *argv[], appl_args_t *appl_args);
 static void print_info(char *progname, appl_args_t *appl_args);
 static void usage(char *progname);
+
+static odp_spinlock_t lock;
 
 static void analyze_packet_in_snort(odp_packet_t pkt, int thr)
 {
@@ -89,15 +90,13 @@ static void analyze_packet_in_snort(odp_packet_t pkt, int thr)
 
 	data = odp_packet_l2(pkt);
 	if (!data) {
-		printf("no l2 offset, packet dropped\n");
 		return;
 	}
 
 	gettimeofday(&daqhdr.ts, NULL);
 	daqhdr.caplen = odp_buffer_size(pkt);
-	printf("%s() odp recieved packet len %d. thread %d\n", __func__, odp_packet_get_len(pkt), thr);
 	daqhdr.pktlen = odp_packet_get_len(pkt);
-	daqhdr.ingress_index = 0;
+	daqhdr.ingress_index = thr;
 	daqhdr.egress_index =  DAQ_PKTHDR_UNKNOWN;
 	daqhdr.ingress_group = DAQ_PKTHDR_UNKNOWN;
 	daqhdr.egress_group = DAQ_PKTHDR_UNKNOWN;
@@ -107,8 +106,25 @@ static void analyze_packet_in_snort(odp_packet_t pkt, int thr)
 	daqhdr.address_space_id = 0;
 
 	/* Pass packet to Snort */
-	verd = PacketCallback( "NULL", daqhdr, data);
+	odp_spinlock_lock(&lock);
+	verd = PacketCallback( "NULL", &daqhdr, data);
+	odp_spinlock_unlock(&lock);
 	return;
+}
+
+static int snort_analyze_packets_tbl(odp_packet_t pkt_tbl[], unsigned len, int thr)
+{
+	odp_packet_t pkt;
+	unsigned pkt_cnt = len;
+	unsigned i, j;
+
+	for (i = 0; i < len; ++i) {
+		pkt = pkt_tbl[i];
+		analyze_packet_in_snort(pkt, thr);
+		odp_packet_free(pkt);
+	}
+
+	return pkt_cnt;
 }
 
 /**
@@ -148,8 +164,8 @@ static void *pktio_queue_thread(void *arg)
 	}
 
 	/* Open a packet IO instance for this thread */
-	sock_params->type = ODP_PKTIO_TYPE_SOCKET_BASIC;
-	sock_params->fanout = 0;
+	sock_params->type = thr_args->type;
+	sock_params->fanout = thr_args->fanout;
 	pktio = odp_pktio_open(thr_args->pktio_dev, pkt_pool, &params);
 	if (pktio == ODP_PKTIO_INVALID) {
 		ODP_ERR("  [%02i] Error: pktio create failed\n", thr);
@@ -194,20 +210,16 @@ static void *pktio_queue_thread(void *arg)
 		buf = odp_queue_deq(inq_def);
 #endif
 
-		if (!odp_buffer_is_valid(buf))
+
+		if (!odp_buffer_is_valid(buf)) {
 			continue;
+		}
 
 		pkt = odp_packet_from_buffer(buf);
 
 		analyze_packet_in_snort(pkt, thr);
-
-#if 0
-		/* Print packet counts every once in a while */
-		if (odp_unlikely(pkt_cnt++ % 100000 == 0)) {
-			printf("  [%02i] pkt_cnt:%lu\n", thr, pkt_cnt);
-			fflush(NULL);
-		}
-#endif
+		odp_buffer_free(buf);
+		pc.total_from_daq++;
 	}
 
 /* unreachable */
@@ -240,12 +252,13 @@ static void *pktio_ifburst_thread(void *arg)
 
 	/* Lookup the packet pool */
 	pkt_pool = odp_buffer_pool_lookup("packet_pool");
-	if (pkt_pool == ODP_BUFFER_POOL_INVALID || pkt_pool != thr_args->pool) {
+	if (pkt_pool == ODP_BUFFER_POOL_INVALID) {
 		ODP_ERR("  [%02i] Error: pkt_pool not found\n", thr);
 		return NULL;
 	}
 
 	/* Open a packet IO instance for this thread */
+
 	sock_params->type = thr_args->type;
 	sock_params->fanout = thr_args->fanout;
 	pktio = odp_pktio_open(thr_args->pktio_dev, pkt_pool, &params);
@@ -261,27 +274,8 @@ static void *pktio_ifburst_thread(void *arg)
 	for (;;) {
 		pkts = odp_pktio_recv(pktio, pkt_tbl, MAX_PKT_BURST);
 		if (pkts > 0) {
-			/* Drop packets with errors */
-			pkts_ok = drop_err_pkts(pkt_tbl, pkts);
-			if (pkts_ok > 0) {
-				/* Swap Eth MACs and IP-addrs */
-				swap_pkt_addrs(pkt_tbl, pkts_ok);
-				odp_pktio_send(pktio, pkt_tbl, pkts_ok);
-			}
-
-			if (odp_unlikely(pkts_ok != pkts))
-				ODP_ERR("Dropped frames:%u - err_cnt:%lu\n",
-					pkts-pkts_ok, ++err_cnt);
-
-			/* Print packet counts every once in a while */
-			tmp += pkts_ok;
-			if (odp_unlikely((tmp >= 100000) || /* OR first print:*/
-			    ((pkt_cnt == 0) && ((tmp-1) < MAX_PKT_BURST)))) {
-				pkt_cnt += tmp;
-				printf("  [%02i] pkt_cnt:%lu\n", thr, pkt_cnt);
-				fflush(NULL);
-				tmp = 0;
-			}
+			snort_analyze_packets_tbl(pkt_tbl, pkts, thr);
+			pc.total_from_daq += pkts;
 		}
 	}
 
@@ -315,15 +309,44 @@ int do_odp_init(int argc, char *argv[])
 	}
 	memset(args, 0, sizeof(*args));
 
-	/* Parse and store the application arguments */
-	//parse_args(argc, argv, &args->appl);
-	args->appl.core_count = 1;
-	args->appl.if_count = 1;
-	args->appl.if_names = calloc(args->appl.if_count, sizeof(char *));
-	args->appl.if_names[0] = strdup("eth0");
+	/* Parse -i argument, other arguments will be parsed by Snort. */
+	parse_args(argc, argv, &args->appl);
 
-	args->appl.fanout = 0;
-	args->appl.mode = APPL_MODE_PKT_QUEUE; 
+	char *tmp = getenv("ODP_CORES");
+	if (tmp)
+		args->appl.core_count = atoi(tmp);
+	else
+		args->appl.core_count = 1;
+
+	/* always use fanout. */
+	args->appl.fanout = 1;
+
+	/* Use queque mode by default */
+	tmp = getenv("ODP_PTK_BURST");
+	if (tmp)
+		args->appl.mode = APPL_MODE_PKT_BURST;
+	else
+		args->appl.mode = APPL_MODE_PKT_QUEUE;
+
+
+	tmp = getenv("ODP_PKTIO_TYPE_SOCKET");
+	if (tmp)
+		args->appl.type = atoi(tmp);
+	else
+		args->appl.type = ODP_PKTIO_TYPE_SOCKET_BASIC;
+
+	switch (args->appl.type) {
+	case ODP_PKTIO_TYPE_SOCKET_MMSG:
+		printf("using ODP_PKTIO_TYPE_SOCKET_MMSG\n");
+		break;
+	case ODP_PKTIO_TYPE_SOCKET_MMAP:
+		printf("using ODP_PKTIO_TYPE_SOCKET_MMAP\n");
+		break;
+	case ODP_PKTIO_TYPE_SOCKET_BASIC:
+	default:
+		printf("using ODP_PKTIO_TYPE_SOCKET_BASIC\n");
+		break;
+	}
 
 	/* Print both system and application information */
 	print_info(NO_PATH(argv[0]), &args->appl);
@@ -384,6 +407,11 @@ void odp_snort_run_threads(void)
 
 	printf("Num worker threads: %i\n", num_workers);
 
+	/* Clear Snort stats */
+	memset(&pc, 0, sizeof(PacketCount));
+	/* Set snort start time */
+	TimeStart();
+
 	/* Create and init worker threads */
 	memset(thread_tbl, 0, sizeof(thread_tbl));
 	for (i = 0; i < num_workers; ++i) {
@@ -418,75 +446,6 @@ void odp_snort_run_threads(void)
 	printf("Exit\n\n");
 }
 
-
-/**
- * Drop packets which input parsing marked as containing errors.
- *
- * Frees packets with error and modifies pkt_tbl[] to only contain packets with
- * no detected errors.
- *
- * @param pkt_tbl  Array of packet
- * @param len      Length of pkt_tbl[]
- *
- * @return Number of packets with no detected error
- */
-static int drop_err_pkts(odp_packet_t pkt_tbl[], unsigned len)
-{
-	odp_packet_t pkt;
-	unsigned pkt_cnt = len;
-	unsigned i, j;
-
-	for (i = 0, j = 0; i < len; ++i) {
-		pkt = pkt_tbl[i];
-
-		if (odp_unlikely(odp_packet_error(pkt))) {
-			odp_packet_free(pkt); /* Drop */
-			pkt_cnt--;
-		} else if (odp_unlikely(i != j++)) {
-			pkt_tbl[j] = pkt;
-		}
-	}
-
-	return pkt_cnt;
-}
-
-/**
- * Swap eth src<->dst and IP src<->dst addresses
- *
- * @param pkt_tbl  Array of packets
- * @param len      Length of pkt_tbl[]
- */
-
-static void swap_pkt_addrs(odp_packet_t pkt_tbl[], unsigned len)
-{
-	odp_packet_t pkt;
-	odp_ethhdr_t *eth;
-	odp_ethaddr_t tmp_addr;
-	odp_ipv4hdr_t *ip;
-	uint32be_t ip_tmp_addr; /* tmp ip addr */
-	unsigned i;
-
-	for (i = 0; i < len; ++i) {
-		pkt = pkt_tbl[i];
-		if (odp_packet_inflag_eth(pkt)) {
-			eth = (odp_ethhdr_t *)odp_packet_l2(pkt);
-
-			tmp_addr = eth->dst;
-			eth->dst = eth->src;
-			eth->src = tmp_addr;
-
-			if (odp_packet_inflag_ipv4(pkt)) {
-				/* IPv4 */
-				ip = (odp_ipv4hdr_t *)odp_packet_l3(pkt);
-
-				ip_tmp_addr  = ip->src_addr;
-				ip->src_addr = ip->dst_addr;
-				ip->dst_addr = ip_tmp_addr;
-			}
-		}
-	}
-}
-
 /**
  * Parse and store the command line arguments
  *
@@ -502,33 +461,17 @@ static void parse_args(int argc, char *argv[], appl_args_t *appl_args)
 	size_t len;
 	int i;
 	static struct option longopts[] = {
-		{"count", required_argument, NULL, 'c'},
 		{"interface", required_argument, NULL, 'i'},	/* return 'i' */
-		{"mode", required_argument, NULL, 'm'},		/* return 'm' */
-		{"help", no_argument, NULL, 'h'},		/* return 'h' */
 		{NULL, 0, NULL, 0}
 	};
 
-	appl_args->mode = -1; /* Invalid, must be changed by parsing */
-	appl_args->type = 3;  /* 3: ODP_PKTIO_TYPE_SOCKET_MMAP */
-	appl_args->fanout = 1; /* turn off fanout by default for mmap */
-
-	for (i = 0; i < argc; i++)
-		printf("argv %s\n", argv[i]);
-
 	while (1) {
-		opt = getopt_long(argc, argv, "+c:i:m:t:f:h",
+		opt = getopt_long(argc, argv, "+i:",
 				  longopts, &long_index);
-
-		printf("opt %d\n", opt);
 		if (opt == -1)
 			break;	/* No more options */
 
 		switch (opt) {
-		case 'c':
-			appl_args->core_count = atoi(optarg);
-			break;
-			/* parse packet-io interface names */
 		case 'i':
 			len = strlen(optarg);
 			if (len == 0) {
@@ -570,38 +513,9 @@ static void parse_args(int argc, char *argv[], appl_args_t *appl_args)
 				appl_args->if_names[i] = token;
 			}
 			break;
-
-		case 'm':
-			i = atoi(optarg);
-			if (i == 0)
-				appl_args->mode = APPL_MODE_PKT_BURST;
-			else
-				appl_args->mode = APPL_MODE_PKT_QUEUE;
-			break;
-
-		case 't':
-			appl_args->type = atoi(optarg);
-			break;
-
-		case 'f':
-			appl_args->fanout = atoi(optarg);
-			break;
-
-		case 'h':
-			usage(argv[0]);
-			exit(EXIT_SUCCESS);
-			break;
-
 		default:
 			break;
 		}
-	}
-
-	if (appl_args->if_count == 0 || appl_args->mode == -1) {
-		usage(argv[0]);
-		printf("unable to parse odp args if_count %d mode %d\n", 
-				appl_args->if_count, appl_args->mode);
-		exit(EXIT_FAILURE);
 	}
 
 	optind = 1;		/* reset 'extern optind' from the getopt lib */

@@ -1,0 +1,39 @@
+ODP application which use Snort for analyzing packets
+
+
+1. To run execute:
+./odp-snort -i eth0,eth1  <optional snort args>
+
+eth0,eth1 any number of interfaces to listen for packets.
+
+Standard Snort arguments are supported. Run --help for more options.
+
+2. ODP tuning:
+
+2a. ODP can work in queue and burst mode. By default queue mode
+    is selected. To switch to burst mode do:
+
+    export ODP_PTK_BURST
+
+2b. If you are using linux-generic then you can select one of supported
+    packets i/o. Export appropriate env:
+
+     export ODP_PKTIO_TYPE_SOCKET=1  // for ODP_PKTIO_TYPE_SOCKET_BASIC
+     export ODP_PKTIO_TYPE_SOCKET=2  // for ODP_PKTIO_TYPE_SOCKET_MMSG
+     export ODP_PKTIO_TYPE_SOCKET=3  // for ODP_PKTIO_TYPE_SOCKET_MMAP
+
+2c. Number of cores for packet processing:
+    export ODP_CORES=4
+
+3. Limitation
+
+ Snort 2.9.x is not thread safe due to:
+    - global variables;
+    - calls to thread unsafe functions: like ctime(), strtok();
+    - files logs, init process should be different for several threads;
+ Threads has to be fixed in new SnortSP (which is snort 3.0).
+
+ In current example 'odp_spinlock_t lock' is used to defend calls to snort analyze packet
+ function. That is leads to limitation to scale on different cpus. Further experiments will
+ be done with SnortSP to get rid of that limitation.
+
