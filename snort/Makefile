@@ -19,7 +19,7 @@ snortprep:
 	rm -rf snort-2.9.6.0
 	tar xpfz download/snort-2.9.6.0.tar.gz
 
-SNORT="snort-2.9.6.1-odp"
+SNORT="snort-2.9.6.0-odp"
 snort: snortprep daq
 	rm -rf $(SNORT)
 	cp -a snort-2.9.6.0 $(SNORT)
