@@ -29,7 +29,7 @@ openvpn:
 	&& git checkout $(OPENVPN_VERSION) \
 	&& git am ../patches/*.patch \
 	&& autoreconf -i -v -f \
-	&& ./configure
+	&& ./configure --disable-snappy
 	make -C $(OPENVPN_DIR)
 
 .PHONY: clean_openvpn
