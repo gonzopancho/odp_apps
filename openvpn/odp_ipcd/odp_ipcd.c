@@ -25,10 +25,10 @@
 #include <netdb.h>
 
 #include <odp.h>
-#include <helper/odp_linux.h>
-#include <helper/odp_eth.h>
-#include <helper/odp_ip.h>
-#include <helper/odp_udp.h>
+#include <odph_linux.h>
+#include <odph_eth.h>
+#include <odph_ip.h>
+#include <odph_udp.h>
 
 #include "odp_ipcd.h"
 #include "helper.h"

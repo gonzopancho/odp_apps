@@ -1,23 +1,25 @@
 .PHONY: libpcap openvpn
 
-all: openvpn libpcap snort
+all: libpcap snort
 
 libpcap: odp
-	make -C libpcap ODP_DIR=$(PWD)/odp.git
+	make -C libpcap ODP_DIR=$(PWD)/../odp-bin
 
 openvpn: odp
 	make -C openvpn
 
 snort: odp
-	make -C snort
+	make -C snort ODP_DIR=$(PWD)/../odp-bin
 
 odp:
 	if [ ! -d odp.git ]; \
 		then git clone http://git.linaro.org/git/lng/odp.git odp.git; \
 	fi
-	cd odp.git; git reset --hard a5b7d50a6ac17ef5ada2da2232764065fce48c31
-	cd odp.git; patch -N -p1 < ../snort/odp-patches/0001-implement-odp_timer_disarm_all.patch
-	cd odp.git; make libs_install  CFLAGS="-fPIC"
+	cd odp.git; git checkout -f HEAD; \
+		git pull; git clean -f -d -x; \
+		./bootstrap; \
+		./configure --prefix=$(PWD)/../odp-bin --with-pic; \
+		make; make install
 
 distclean:
 	rm -rf odp.git

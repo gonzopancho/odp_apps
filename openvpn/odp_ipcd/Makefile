@@ -3,12 +3,12 @@
 #
 # SPDX-License-Identifier:     BSD-3-Clause
 
-ODP_ROOT = ../../odp.git
+ODP_ROOT = ../../odp-bin
 ODP_APP  = odp_ipcd
 
-ODP_LIB = $(ODP_ROOT)/build/lib/libodp.a
-EXTRA_CFLAGS += -I$(ODP_ROOT)/build/include
-EXTRA_CFLAGS += -I$(ODP_ROOT)/build/include/api
+ODP_LIB = $(ODP_ROOT)/lib/libodp.a
+EXTRA_CFLAGS += -I$(ODP_ROOT)/include
+EXTRA_CFLAGS += -I$(ODP_ROOT)/include/helper
 
 LDFLAGS += -pthread
 LDFLAGS += -lrt

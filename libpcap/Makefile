@@ -3,17 +3,17 @@
 #
 # SPDX-License-Identifier:     BSD-3-Clause
 
-LIBPCAP_REPO=git://bpf.tcpdump.org/libpcap
+LIBPCAP_REPO=https://github.com/muvarov/libpcap.git
 LIBPCAP_DIR=libpcap
 TCPDUMP_REPO=https://github.com/the-tcpdump-group/tcpdump.git
 TCPDUMP_DIR=tcpdump
 WIRESHARK_REPO=https://code.wireshark.org/review/p/wireshark.git
 WIRESHARK_DIR=wireshark
-LIBPCAP_VERSION=625575f443800d344b61560e223309580f1799b8
+LIBPCAP_VERSION=HEAD
 TCPDUMP_VERSION=tcpdump-4.2.1
 WIRESHARK_VERSION=wireshark-1.8.9
 
-ODP_DIR ?= $(PWD)/../odp.git
+ODP_DIR ?= $(PWD)/../odp-bin
 
 .PHONY: all
 all: libpcap tcpdump
@@ -31,8 +31,7 @@ clean: clean_libpcap clean_tcpdump
 libpcap: get_libpcap
 	cd $(LIBPCAP_DIR) \
 	&& git checkout $(LIBPCAP_VERSION) \
-	&& git am ../patches/*.patch \
-	&& ./configure --with-odp=$(ODP_DIR) --libdir=/usr/lib
+	&& ./configure --with-odp=$(ODP_DIR) --with-odp-includes=$(ODP_DIR)/include
 	$(MAKE) -C $(LIBPCAP_DIR)
 
 .PHONY: get_libpcap
