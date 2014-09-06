@@ -31,7 +31,7 @@ clean: clean_libpcap clean_tcpdump
 libpcap: get_libpcap
 	cd $(LIBPCAP_DIR) \
 	&& git checkout $(LIBPCAP_VERSION) \
-	&& ./configure --with-odp=$(ODP_DIR) --with-odp-includes=$(ODP_DIR)/include
+	&& ./configure --with-odp=$(ODP_DIR)
 	$(MAKE) -C $(LIBPCAP_DIR)
 
 .PHONY: get_libpcap
