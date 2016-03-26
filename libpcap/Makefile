@@ -3,14 +3,15 @@
 #
 # SPDX-License-Identifier:     BSD-3-Clause
 
-LIBPCAP_REPO=https://github.com/muvarov/libpcap.git
-LIBPCAP_DIR=libpcap
+#LIBPCAP_REPO=https://github.com/muvarov/libpcap.git
+LIBPCAP_REPO=https://github.com/repu1sion/odp_libpcap.git
+LIBPCAP_DIR=odp_libpcap
 TCPDUMP_REPO=https://github.com/the-tcpdump-group/tcpdump.git
 TCPDUMP_DIR=tcpdump
 WIRESHARK_REPO=https://code.wireshark.org/review/p/wireshark.git
 WIRESHARK_DIR=wireshark
 LIBPCAP_VERSION=HEAD
-TCPDUMP_VERSION=tcpdump-4.2.1
+TCPDUMP_VERSION=tcpdump-4.7.4
 WIRESHARK_VERSION=wireshark-1.8.9
 
 ODP_DIR ?= $(PWD)/../odp-bin
