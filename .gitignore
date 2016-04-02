@@ -1,4 +1,4 @@
-libpcap/odp_libpcap/
+libpcap/libpcap/
 libpcap/tcpdump
 odp.git/
 *.sw?
