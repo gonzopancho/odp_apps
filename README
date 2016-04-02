@@ -1,0 +1,19 @@
+[Build instructions (for a first time):]
+--------------------------------------------------------------------------------
+1. download only odp_apps repo. (this one). there is no need to download libpcap one.
+# git clone git@github.com:repu1sion/odp_apps.git
+
+2. if you already did this then just "git pull" to get updates
+# git pull
+
+3. "make" from odp-apps. libpcap and odp-git will be downloaded automatically.this is enough. a
+# make
+
+make will automatically get into libpcap dir and execute makefile from it  with "./configure --with-odp=$(ODP_DIR)"
+so you don't need to set it manually
+
+
+[Rebuild instructions (to pull latest sources):]
+--------------------------------------------------------------------------------
+# ./rebuild.sh
+
