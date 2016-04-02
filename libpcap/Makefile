@@ -5,7 +5,8 @@
 
 #LIBPCAP_REPO=https://github.com/muvarov/libpcap.git
 LIBPCAP_REPO=https://github.com/repu1sion/odp_libpcap.git
-LIBPCAP_DIR=odp_libpcap
+LIBPCAP_DIR=libpcap
+LIBPCAP_GITNAME=odp_libpcap
 TCPDUMP_REPO=https://github.com/the-tcpdump-group/tcpdump.git
 TCPDUMP_DIR=tcpdump
 WIRESHARK_REPO=https://code.wireshark.org/review/p/wireshark.git
@@ -37,7 +38,7 @@ libpcap: get_libpcap
 
 .PHONY: get_libpcap
 get_libpcap:
-	if [ ! -d $(LIBPCAP_DIR) ]; then git clone $(LIBPCAP_REPO); \
+	if [ ! -d $(LIBPCAP_DIR) ]; then git clone $(LIBPCAP_REPO); mv -v $(LIBPCAP_GITNAME) $(LIBPCAP_DIR); \
 	else cd $(LIBPCAP_DIR); git fetch --all; fi
 
 .PHONY: install_libpcap
